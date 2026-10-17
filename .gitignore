@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.py[oc]
+*.egg-info/
+
+# Backups left by the patcher
+*.orig
+
+# macOS
+.DS_Store

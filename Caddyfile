@@ -1,0 +1,50 @@
+{
+    admin localhost:2019
+    http_port 80
+    https_port 443
+}
+
+# Signal vhost (HTTPS). Caddy reverse-proxies to HopSignal on
+# 127.0.0.1:9000. The certs come from certbot.
+SIGNAL_HOST:443 {
+    tls /etc/letsencrypt/live/SIGNAL_HOST/fullchain.pem /etc/letsencrypt/live/SIGNAL_HOST/privkey.pem {
+        protocols tls1.2
+    }
+    reverse_proxy 127.0.0.1:9000
+}
+
+# Plain-HTTP vhost on :80. The Mac native client uses ws://
+# (rendezvous on port 80) because native-tls on macOS chokes on the
+# Let's Encrypt YR2 chain. We MUST serve WS on 80 directly (no
+# 308->HTTPS redirect), otherwise the Mac gets stuck "Connecting to
+# the HopToDesk network...". This vhost reverse-proxies to HopSignal.
+SIGNAL_HOST:80 {
+    reverse_proxy 127.0.0.1:9000
+}
+
+# Web client on :80 — only used for ACME HTTP-01 challenges.
+# Just serve the static root so the host exists on :80 too.
+WEB_HOST:80 {
+    root * /var/www/web
+    file_server
+}
+
+# Web client on :443. file_server for the patched bundle; relay path
+# reverse-proxies to the bridge. transport http { versions 1.1 } is
+# required because the bridge uses a Python websockets library that
+# is HTTP/1.1 only.
+WEB_HOST:443 {
+    tls /etc/letsencrypt/live/WEB_HOST/fullchain.pem /etc/letsencrypt/live/WEB_HOST/privkey.pem {
+        protocols tls1.2
+    }
+    root * /var/www/web
+    route {
+        @relay path /relay*
+        reverse_proxy @relay 127.0.0.1:8443 {
+            transport http {
+                versions 1.1
+            }
+        }
+        file_server
+    }
+}
